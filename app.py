@@ -14,24 +14,19 @@ MEMO_PROMPT = """Write an investment screening memo for the following company.
 Company: {company_name}
 {notes_line}
 
-Structure the memo with exactly these five sections and headers:
+Structure the memo with exactly these four sections and headers. Each section must be 30 words or fewer.
 
 ## Company Overview
-Provide 2-3 paragraphs covering what the company does, its business model, key products or services,
-competitive landscape, and industry context.
+One or two sentences covering what the company does and its business model.
 
 ## Investment Thesis
-Provide 2-3 paragraphs explaining why this could be a compelling investment opportunity and the
-path to value creation.
+One or two sentences on why this could be a compelling investment opportunity.
 
 ## Key Risks
-Provide a bulleted list of the 5-6 most important risks to the investment thesis.
-
-## Diligence Questions
-Provide a bulleted list of 6-8 specific questions that must be answered in due diligence.
+A bulleted list of the 3 most important risks. Each bullet must be one short phrase.
 
 ## Recommendation
-State clearly: PURSUE, WATCHLIST, or PASS — followed by 2-3 sentences of rationale."""
+State clearly: PURSUE, WATCHLIST, or PASS — followed by one sentence of rationale."""
 
 
 @app.route("/")
@@ -60,7 +55,7 @@ def generate():
         try:
             with client.messages.stream(
                 model="claude-opus-4-6",
-                max_tokens=2048,
+                max_tokens=512,
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": prompt}]
             ) as s:
