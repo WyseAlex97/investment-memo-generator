@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Investment Memo Generator</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:    #0d1b2a;
+      --blue:    #1a3a5c;
+      --accent:  #2563eb;
+      --border:  #e2e8f0;
+      --text:    #1e293b;
+      --muted:   #64748b;
+      --bg:      #f8fafc;
+      --white:   #ffffff;
+      --radius:  10px;
+      --shadow:  0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--navy);
+      padding: 28px 40px 24px;
+      border-bottom: 3px solid var(--accent);
+    }
+    header h1 { font-size: 1.6rem; font-weight: 700; color: #fff; letter-spacing: -.3px; }
+    header p  { margin-top: 4px; font-size: .875rem; color: #94a3b8; }
+
+    /* ── Layout ── */
+    .container { max-width: 860px; margin: 0 auto; padding: 36px 24px 72px; }
+
+    /* ── Input Card ── */
+    .input-card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 32px 36px;
+      margin-bottom: 28px;
+    }
+    .input-card h2 {
+      font-size: .8125rem; font-weight: 700; color: var(--blue);
+      text-transform: uppercase; letter-spacing: .8px; margin-bottom: 20px;
+    }
+
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+    @media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } }
+
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label {
+      font-size: .775rem; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .5px;
+    }
+    .field input, .field textarea {
+      border: 1.5px solid var(--border); border-radius: 7px;
+      padding: 10px 14px; font-size: .9375rem; color: var(--text);
+      background: var(--white); transition: border-color .15s;
+      font-family: inherit; resize: none;
+    }
+    .field input:focus, .field textarea:focus {
+      outline: none; border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+    }
+    .field textarea { height: 78px; }
+
+    .btn-generate {
+      margin-top: 20px;
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 7px;
+      padding: 11px 28px; font-size: .9375rem; font-weight: 600;
+      cursor: pointer; transition: background .15s, transform .1s;
+    }
+    .btn-generate:hover:not(:disabled) { background: #1d4ed8; }
+    .btn-generate:active:not(:disabled) { transform: translateY(1px); }
+    .btn-generate:disabled { background: #93c5fd; cursor: not-allowed; }
+
+    /* ── Memo Card ── */
+    .memo-card {
+      display: none;
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .memo-card.visible { display: block; }
+
+    .memo-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 24px; border-bottom: 1px solid var(--border);
+      background: #fafbfc;
+    }
+    .memo-card-header .left { display: flex; align-items: center; gap: 10px; }
+    .memo-badge {
+      font-size: .7rem; font-weight: 700; letter-spacing: .6px;
+      text-transform: uppercase; padding: 3px 10px; border-radius: 20px;
+      background: #f0fdf4; color: #166534;
+    }
+    .memo-title { font-size: .9375rem; font-weight: 600; }
+
+    .memo-body { padding: 28px 32px; }
+
+    /* Spinner */
+    .spinner-row {
+      display: none; align-items: center; gap: 10px;
+      color: var(--muted); font-size: .875rem; margin-bottom: 16px;
+    }
+    .spinner-row.visible { display: flex; }
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Error */
+    .error-box {
+      display: none; background: #fef2f2; border: 1px solid #fecaca;
+      border-radius: 7px; padding: 12px 16px;
+      color: #991b1b; font-size: .875rem; margin-bottom: 16px;
+    }
+    .error-box.visible { display: block; }
+
+    /* ── Memo Content ── */
+    .memo-output { font-size: .9125rem; color: var(--text); }
+
+    .memo-output h2 {
+      font-size: 1rem; font-weight: 700; color: var(--blue);
+      margin: 24px 0 10px; padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .memo-output h2:first-child { margin-top: 0; }
+    .memo-output p  { margin-bottom: 12px; }
+    .memo-output ul { padding-left: 20px; margin-bottom: 12px; }
+    .memo-output li { margin-bottom: 5px; }
+    .memo-output strong { font-weight: 600; }
+
+    .rec-pill {
+      display: inline-block; font-size: .875rem; font-weight: 700;
+      padding: 3px 14px; border-radius: 20px; margin-left: 6px;
+    }
+    .rec-pursue    { background: #dcfce7; color: #166534; }
+    .rec-watchlist { background: #fef9c3; color: #854d0e; }
+    .rec-pass      { background: #fee2e2; color: #991b1b; }
+
+    /* ── Download ── */
+    .download-row {
+      display: none; justify-content: flex-end; margin-top: 24px;
+    }
+    .download-row.visible { display: flex; }
+    .btn-download {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--navy); color: #fff;
+      border: none; border-radius: 7px;
+      padding: 10px 22px; font-size: .875rem; font-weight: 600;
+      cursor: pointer; transition: background .15s;
+    }
+    .btn-download:hover { background: var(--blue); }
+
+    /* ── PDF hidden ── */
+    #pdf-content {
+      position: absolute; left: -9999px; top: 0;
+      font-family: Georgia, serif;
+      font-size: 11pt; color: #000; padding: 40px; max-width: 750px;
+    }
+    #pdf-content h1 { font-size: 18pt; margin-bottom: 4px; }
+    #pdf-content .pdf-meta { font-size: 9pt; color: #666; margin-bottom: 28px; border-bottom: 1px solid #ccc; padding-bottom: 12px; }
+    #pdf-content h2 { font-size: 12pt; font-weight: bold; margin: 22px 0 7px; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+    #pdf-content h2:first-of-type { margin-top: 0; }
+    #pdf-content p  { margin-bottom: 10px; }
+    #pdf-content ul { padding-left: 20px; margin-bottom: 10px; }
+    #pdf-content li { margin-bottom: 4px; }
+    #pdf-content .pdf-footer { margin-top: 32px; font-size: 8pt; color: #999; border-top: 1px solid #ddd; padding-top: 10px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Investment Memo Generator</h1>
+  <p>AI-powered prototype for rapid investment screening</p>
+</header>
+
+<div class="container">
+
+  <div class="input-card">
+    <h2>Company Details</h2>
+    <div class="form-grid">
+      <div class="field">
+        <label for="company-name">Company Name <span style="color:#ef4444">*</span></label>
+        <input id="company-name" type="text" placeholder="e.g. Stripe, Figma, Databricks"
+               onkeydown="if(event.key==='Enter') generate()" />
+      </div>
+      <div class="field">
+        <label for="notes">Notes &amp; Context <span style="color:#94a3b8">(optional)</span></label>
+        <textarea id="notes" placeholder="e.g. Series B SaaS, vertical AI focus, recent leadership change…"></textarea>
+      </div>
+    </div>
+    <button class="btn-generate" id="gen-btn" onclick="generate()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Generate Memo
+    </button>
+  </div>
+
+  <!-- Memo Output Card -->
+  <div class="memo-card" id="memo-card">
+    <div class="memo-card-header">
+      <div class="left">
+        <span class="memo-badge">Investment Memo</span>
+        <span class="memo-title" id="memo-company-title">—</span>
+      </div>
+    </div>
+    <div class="memo-body">
+      <div class="spinner-row" id="spinner">
+        <div class="spinner"></div>
+        <span>Generating investment memo…</span>
+      </div>
+      <div class="error-box" id="error-box"></div>
+      <div class="memo-output" id="memo-output"></div>
+    </div>
+  </div>
+
+
+</div>
+
+<div id="pdf-content"></div>
+
+<script>
+  let rawMemo = '';
+  let currentCompany = '';
+
+  // ── Lightweight markdown → HTML ───────────────────────────────────────────
+  function renderMd(text) {
+    const lines = text.split('\n');
+    let html = '';
+    let inList = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i]
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+      if (/^## (.+)/.test(line)) {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += `<h2>${line.replace(/^## /,'')}</h2>`;
+      } else if (/^[-•*] (.+)/.test(line)) {
+        if (!inList) { html += '<ul>'; inList = true; }
+        html += `<li>${line.replace(/^[-•*] /,'')}</li>`;
+      } else if (line.trim() === '') {
+        if (inList) { html += '</ul>'; inList = false; }
+      } else {
+        if (inList) { html += '</ul>'; inList = false; }
+        html += `<p>${line}</p>`;
+      }
+    }
+    if (inList) html += '</ul>';
+    return html;
+  }
+
+  // ── Generate ──────────────────────────────────────────────────────────────
+  async function generate() {
+    const company = document.getElementById('company-name').value.trim();
+    if (!company) { document.getElementById('company-name').focus(); return; }
+
+    currentCompany = company;
+    rawMemo = '';
+
+    // Reset UI
+    document.getElementById('memo-output').innerHTML = '';
+    document.getElementById('error-box').classList.remove('visible');
+    document.getElementById('error-box').textContent = '';
+document.getElementById('memo-company-title').textContent = company;
+    document.getElementById('memo-card').classList.add('visible');
+    document.getElementById('spinner').classList.add('visible');
+
+    // Disable button
+    const btn = document.getElementById('gen-btn');
+    btn.disabled = true;
+    btn.innerHTML = `<div class="spinner" style="border-top-color:#fff;border-color:rgba(255,255,255,.3);width:14px;height:14px"></div> Generating…`;
+
+    try {
+      const resp = await fetch('/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company_name: company,
+          notes: document.getElementById('notes').value.trim()
+        })
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        showError(err.error || `Server error ${resp.status}`);
+        resetBtn(); return;
+      }
+
+      const reader = resp.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+
+        // Process complete SSE messages
+        const parts = buf.split('\n\n');
+        buf = parts.pop();
+
+        for (const part of parts) {
+          const dataLine = part.split('\n').find(l => l.startsWith('data: '));
+          if (!dataLine) continue;
+          const payload = dataLine.slice(6).trim();
+          if (payload === '[DONE]') {
+            finalize(); continue;
+          }
+          let msg;
+          try { msg = JSON.parse(payload); } catch { continue; }
+          if (msg.error) { showError(msg.error); break; }
+          if (msg.text) {
+            rawMemo += msg.text;
+            document.getElementById('memo-output').innerHTML = renderMd(rawMemo);
+          }
+        }
+      }
+
+      // Handle any leftover buffer
+      if (buf.trim()) {
+        const dataLine = buf.split('\n').find(l => l.startsWith('data: '));
+        if (dataLine) {
+          const payload = dataLine.slice(6).trim();
+          if (payload !== '[DONE]') {
+            try {
+              const msg = JSON.parse(payload);
+              if (msg.text) { rawMemo += msg.text; document.getElementById('memo-output').innerHTML = renderMd(rawMemo); }
+            } catch {}
+          }
+        }
+      }
+
+      finalize();
+    } catch (e) {
+      showError('Connection error: ' + e.message);
+    }
+
+    resetBtn();
+  }
+
+  function finalize() {
+    document.getElementById('spinner').classList.remove('visible');
+    if (rawMemo) {
+      colorRecommendation();
+    }
+  }
+
+  function showError(msg) {
+    document.getElementById('spinner').classList.remove('visible');
+    const box = document.getElementById('error-box');
+    box.textContent = msg;
+    box.classList.add('visible');
+  }
+
+  function resetBtn() {
+    const btn = document.getElementById('gen-btn');
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Generate Memo`;
+  }
+
+  function colorRecommendation() {
+    const out = document.getElementById('memo-output');
+    out.innerHTML = out.innerHTML.replace(
+      /\b(PURSUE|WATCHLIST|PASS)\b/g,
+      (m) => {
+        const cls = m === 'PURSUE' ? 'rec-pursue' : m === 'WATCHLIST' ? 'rec-watchlist' : 'rec-pass';
+        return `<span class="rec-pill ${cls}">${m}</span>`;
+      }
+    );
+  }
+
+  // ── PDF Download ──────────────────────────────────────────────────────────
+  function downloadPDF() {
+    const date = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+    const el = document.getElementById('pdf-content');
+
+    function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    el.innerHTML = `
+      <h1>${esc(currentCompany)}: Investment Screening Memo</h1>
+      <div class="pdf-meta">
+        Generated ${date} &nbsp;·&nbsp;
+        AI-powered prototype &nbsp;·&nbsp; Not investment advice
+      </div>
+      ${rawMemo
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+        .replace(/^[-•*] (.+)$/gm, '<li>$1</li>')
+        .replace(/((?:<li>[\s\S]+?<\/li>\n?)+)/g, '<ul>$1</ul>')
+        .split(/\n{2,}/)
+        .map(b => { b=b.trim(); if (!b||/^<[hul]/.test(b)) return b; return '<p>'+b+'</p>'; })
+        .join('\n')
+      }
+      <div class="pdf-footer">Generated by Investment Memo Generator &nbsp;·&nbsp; Powered by Claude</div>
+    `;
+
+    html2pdf().set({
+      margin: [18,18,18,18],
+      filename: `${currentCompany.replace(/\s+/g,'_')}_Investment_Memo.pdf`,
+      image: { type:'jpeg', quality:0.95 },
+      html2canvas: { scale:2, useCORS:true },
+      jsPDF: { unit:'mm', format:'a4', orientation:'portrait' }
+    }).from(el).save();
+  }
+</script>
+</body>
+</html>
